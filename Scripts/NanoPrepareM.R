@@ -70,7 +70,7 @@ NanoPrepareM<-function(DataPass,DataFail=NA,DataSkip=NA, Label, MultiRead=FALSE)
 
       Last<-FailFilesOrdered[length(FailFilesOrdered)]
       FileOpen<-H5Fopen(Last)
-      howmany_<--nrow(h5ls(FileOpen, recursive=FALSE, datasetinfo=FALSE))
+      howmany_<-nrow(h5ls(FileOpen, recursive=FALSE, datasetinfo=FALSE))
       H5Fclose(FileOpen)
 
       FailFilesLength<-(howmany*(length(FailFiles)-1) + howmany_)
@@ -112,7 +112,7 @@ NanoPrepareM<-function(DataPass,DataFail=NA,DataSkip=NA, Label, MultiRead=FALSE)
 
       Last<-SkipFilesOrdered[length(SkipFilesOrdered)]
       FileOpen<-H5Fopen(Last)
-      howmany_<--nrow(h5ls(FileOpen, recursive=FALSE, datasetinfo=FALSE))
+      howmany_<-nrow(h5ls(FileOpen, recursive=FALSE, datasetinfo=FALSE))
       H5Fclose(FileOpen)
 
       SkipFilesLength<-(howmany*(length(SkipFiles)-1) + howmany_)
