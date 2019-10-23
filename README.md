@@ -4,7 +4,7 @@
 
 ## NanoR: analysis and comparison of ONT data
 
-NanoR is available to be installed from source. Please have a look at [NanoR documentation](https://davidebolo1993.github.io/nanordoc/) for any installation or usage questions. Documentation is under preparation.
+NanoR is available to be installed from source. Please have a look at [NanoR documentation](https://davidebolo1993.github.io/nanordoc/) for any installation or usage questions.
 
 [Source Code](https://github.com/davidebolo1993/NanoR/tree/master/NanoR)
 
