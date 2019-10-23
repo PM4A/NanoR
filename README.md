@@ -4,7 +4,7 @@
 
 ## NanoR: R package to analyze/visualize and compare ONT data
 
-NanoR is available to be installed from source. Please have a look at [NanoR documentation](https://davidebolo1993.github.io/nanordoc/) for any installation or usage questions. Documentation is being updated (Old usage documentation is still available below).
+NanoR is available to be installed from source. Please have a look at [NanoR documentation](https://davidebolo1993.github.io/nanordoc/) for any installation or usage questions. NanoR documentation is being updated: (old) usage documentation is still available below.
 
 [Source Code](https://github.com/davidebolo1993/NanoR/tree/master/NanoR)
 
@@ -24,7 +24,8 @@ Davide Bolognini, Roberto Semeraro, Alberto Magi.
 Evol Bioinform Online. 2019 Jul 23.
 
 
-### Usage (will be included in the new documentation shortly)
+
+## Usage (will be included in the new documentation shortly)
 
 
 ### MinION and GridION X5 basecalled .fast5 files, single/multi-read (M version)
