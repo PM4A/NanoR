@@ -2,7 +2,7 @@
 
 ![alt text](NanoR.png)
 
-## NanoR: Visualization and Comparison of ONT Data
+## NanoR: R package to analyze/visualize and compare ONT data
 
 NanoR is available to be installed from source. Please have a look at [NanoR documentation](https://davidebolo1993.github.io/nanordoc/) for any installation or usage questions. Documentation is being updated. Get back in the next few days.
 
