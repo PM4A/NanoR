@@ -1,36 +1,31 @@
-
 ############################################ NanoStatsG ############################################
 
 
-#' @title Plots statistics 
-#' @description NanoStatsG plots statistics parsing the metadata table returned by NanoTableG
-#' @param NanoGList Object of class list returned by NanoPrepareG
-#' @param NanoGTable Metadata table returned by NanoTableG
-#' @param DataOut Where results will be saved. Use the same directory specified as "DataOut" for NanoTableG
-#' @param KeepGGObj Store data.frames for ggplot plots in folder. Useful for personalize plot colors. Default to FALSE.
+#' @title NanoStatsG
+#' @description Plot statistics
+#' @param NanoGList Object of class list from NanoPrepareG
+#' @param NanoGTable Object of class matrix from NanoTableG
+#' @param DataOut Output folder (the same used for NanoTableG)
+#' @param KeepGGObj Logical. If TRUE, store ggplot2 data frames behind generated plots [FALSE]
 #' @return Plots: \cr 
 #' - Yield.pdf (accumulation of reads and bps); \cr 
 #' - RBLQ.pdf (# reads, # bps, length and quality overview every 30 minutes of experiment); \cr 
 #' - LvQ.pdf (length and quality compared jointly); \cr 
 #' - PFGC.pdf (passed and failed reads, GC content if previously computed); \cr 
-#' - Activity.pdf (channels activity (# bps). Inactive channels are grey-colored) \cr
+#' - Activity.pdf (channels and muxes activity (# bps). Inactive channels and muxes are grey-colored) \cr
 #' Tables: \cr
-#' - metadata.fltrd.txt (metadata table for high-quality passed sequence)
-#' - ShortSummary.txt (table with major statistics for the experiment)
+#' - summary.txt (table with major statistics for the sequencing run)
 #' @examples
-#' DataOut <- "/path/to/DataOut"
-#' # Need a list previously generated with NanoPreparGM()
-#' # Need a table previously generated with NanoTableG()
-#' # If List from NanoPrepareG() and Table from NanoTableG() exist: 
-#' # Do not save ggplot2 tables:
+#' #do not run
+#' #assume List is the output from NanoPrepareG and Table from NanoTableG
+#' #assume DataOut is the same output specified for NanoTableG
+#' #do not store ggplot2 tables:
 #' NanoStatsG(List,Table, DataOut=DataOut)
-#' # Save ggplot2 tables:
+#' #store ggplot2 tables:
 #' NanoStatsG(List,Table, DataOut=DataOut,KeepGGObj=TRUE)
 
 
 NanoStatsG<-function(NanoGList,NanoGTable,DataOut,KeepGGObj=FALSE) {
-
-  #recreate the same plot of NanoStatsM, but requires different parsing of metadata table
   
   library(reshape2)
   library(scales)
@@ -64,23 +59,14 @@ NanoStatsG<-function(NanoGList,NanoGTable,DataOut,KeepGGObj=FALSE) {
   {
     viewport(layout.pos.row = row, layout.pos.col = col)
   }
-
-  Label<-NanoGList[[3]]    
-  Dirs<-file.path(DataOut, Label)
-  #FCID<-list.files(file.path(Dirs), full.names=FALSE, include.dirs=TRUE, pattern="^FC[12345]")
-
-  #if(length(FCID) == 0) {
-    #stop("Use the same directory specified for NanoTableG function")
-  #}
-
-  Directory<-file.path(DataOut, Label)  #here is the metadata.txt
-
+  
+  Directory<-file.path(DataOut)
+  
   TableInDirectory<-list.files(Directory,pattern="metadata.txt")
-
+  
   if(length(TableInDirectory) == 0) {
-    stop("Use the same directory specified for NanoTableG function")
+    stop("Use the same directory specified for NanoTableG")
   }
-    
   
   CumulativeInDirectory<-list.files(Directory,pattern=("Yield.pdf"))
   
@@ -90,29 +76,22 @@ NanoStatsG<-function(NanoGList,NanoGTable,DataOut,KeepGGObj=FALSE) {
   
   options(scipen=9999)
   setwd(Directory)
-
-          
+  
+  
   Really_Pass_File<-which(as.numeric(NanoGTable[,6]) >= 7)
-  List.Files.HDF5_Fail_Length<-length(which(as.numeric(NanoGTable[,6]) < 7))
-  List.Files.HDF5_Pass.length<-nrow(NanoGTable)-List.Files.HDF5_Fail_Length
+  List.Files.HDF5_Fail_Length<-nrow(NanoGTable) - length(Really_Pass_File)
+  List.Files.HDF5_Pass.length<-length(Really_Pass_File)
   
   NanoTable2<-NanoGTable[Really_Pass_File,]
   
-  write.table(NanoTable2, file.path(Directory, 'metadata.fltrd.txt'), col.names=T, row.names=F, quote=F, sep="\t")
-   
   Table_HDF5_Def<-NanoTable2[,1:6]   
   Time_2<-as.numeric(Table_HDF5_Def[,4])
   Run_Duration<-round(as.numeric(difftime(as.POSIXct(max(Time_2),origin="1/1/1970"), as.POSIXct(min(Time_2), origin="1/1/1970"), units="hours")))
   Relative_Time <- scales::rescale(Time_2, to=c(0,Run_Duration))  
-  #Table_HDF5_Def<-cbind(Table_HDF5,Time_Rescaled)
-  #colnames(Table_HDF5_Def)<-c("Flowcell ID","Read Id","Channel Number","Relative Time","Length of Read","Quality","Relative Experimental Time")
-  
-  
-  #Relative_Time<-as.numeric(Table_HDF5_Def[,7])
   Relative_Time_Per_Hours<-seq(from=min(round(Relative_Time)), to=max(round(Relative_Time)), by=0.5)
   Template_Length<-as.numeric(Table_HDF5_Def[,5])
   Quality_Score<-as.numeric(Table_HDF5_Def[,6])
-    
+  
   message("Analyzing...")
   
   Reads_Per_Hour<-rep(0, length(Relative_Time_Per_Hours))
@@ -163,91 +142,51 @@ NanoStatsG<-function(NanoGList,NanoGTable,DataOut,KeepGGObj=FALSE) {
       }
     }
   }
-
+  
   
   
   Cumulative_Reads<-cumsum(Reads_Per_Hour)
   Cumulative_Basepairs<-cumsum(Base_Pairs_Per_Hour)
-
-  if (is.na(Table_HDF5_Def[1,3])) { #skip muxes reordering
-
-    Channel_Vector<-as.numeric(Table_HDF5_Def[,2])
-    #Mux_Vector<-as.numeric(Table_HDF5_Def[,3])
-    Channels_Number<-c(1:512)
+  
+  
+  Channel_Vector<-as.numeric(Table_HDF5_Def[,2])
+  Mux_Vector<-as.numeric(Table_HDF5_Def[,3])
+  Channels_Number<-c(1:512)
+  
+  
+  Base_Pairs_Per_Channel<-c()
+  
+  Table_HDF5_Re<-list()
+  
+  for (iii in 1:length(Channels_Number)) {
+    Ind_Chann<-which(Channel_Vector == Channels_Number[iii])
+    Mux_Associated<-sort(Mux_Vector[Ind_Chann], index.return=TRUE)$ix
+    if (length(Ind_Chann) == 0) {
+      next
+    }
     
+    if (length(Ind_Chann) == 1) {
+      
+      Table_HDF5_Re[[iii]]<-Table_HDF5_Def[Ind_Chann,]
+      
+    }
     
-    Base_Pairs_Per_Channel<-c()
-    
-    Table_HDF5_Re<-list()
-    
-    for (iii in 1:length(Channels_Number)) {
-      Ind_Chann<-which(Channel_Vector == Channels_Number[iii])
-      #Mux_Associated<-sort(Mux_Vector[Ind_Chann], index.return=TRUE)$ix
-      if (length(Ind_Chann) == 0) {
-        next
-      }
-
-      if (length(Ind_Chann) == 1) {
-
-        Table_HDF5_Re[[iii]]<-Table_HDF5_Def[Ind_Chann,]
-
-      }
-
-      else {
-        Table_HDF5_Re[[iii]]<-Table_HDF5_Def[Ind_Chann,]
-        #Table_HDF5_Reordered<-rbind(Table_HDF5_Reordered,Table_HDF5_Re) slow for very large tables
-      }
-      Base_Pairs_Per_Channel[iii]<-sum(Template_Length[Ind_Chann])
+    else {
+      
+      Table_HDF5_Re[[iii]]<-Table_HDF5_Def[Ind_Chann,][Mux_Associated,]
     }
 
-    Table_HDF5_Reordered<-do.call(rbind,Table_HDF5_Re) # a lot faster
-
-  }
-
-  else { #muxes are present, reorder
-
-    Channel_Vector<-as.numeric(Table_HDF5_Def[,2])
-    Mux_Vector<-as.numeric(Table_HDF5_Def[,3])
-    Channels_Number<-c(1:512)
-    
-    
-    Base_Pairs_Per_Channel<-c()
-    
-    Table_HDF5_Re<-list()
-    
-    for (iii in 1:length(Channels_Number)) {
-      Ind_Chann<-which(Channel_Vector == Channels_Number[iii])
-      Mux_Associated<-sort(Mux_Vector[Ind_Chann], index.return=TRUE)$ix
-      if (length(Ind_Chann) == 0) {
-        next
-      }
-
-      if (length(Ind_Chann) == 1) {
-
-        Table_HDF5_Re[[iii]]<-Table_HDF5_Def[Ind_Chann,]
-
-      }
-
-      else {
-
-        Table_HDF5_Re[[iii]]<-Table_HDF5_Def[Ind_Chann,][Mux_Associated,]
-        #Table_HDF5_Reordered<-rbind(Table_HDF5_Reordered,Table_HDF5_Re) slow for very large tables
-      }
-      Base_Pairs_Per_Channel[iii]<-sum(Template_Length[Ind_Chann])
-    }
-
-    Table_HDF5_Reordered<-do.call(rbind,Table_HDF5_Re) # a lot faster
-
+    Base_Pairs_Per_Channel[iii]<-sum(Template_Length[Ind_Chann])
   }
   
-  #rownames(Table_HDF5_Reordered)<-c()
-  
+  Table_HDF5_Reordered<-do.call(rbind,Table_HDF5_Re) # a lot faster
+   
   
   #PLOT CUMULATIVE READS/BP
-
-
+  
+  
   message("Plotting...")
-
+  
   x<-Relative_Time_Per_Hours
   y0.1<-Cumulative_Reads
   data0.1<-data.frame('x'=x,'y'=y0.1)
@@ -263,10 +202,10 @@ NanoStatsG<-function(NanoGList,NanoGTable,DataOut,KeepGGObj=FALSE) {
     theme_bw()+
     theme(axis.line = element_line(colour = "black"), panel.border = element_blank(), panel.background = element_blank(), axis.title.x = element_text(size=11),axis.title.y = element_text(size=11))+
     theme(legend.position="bottom")
-    #ggtitle("Cumulative Reads")
- 
-
-
+  #ggtitle("Cumulative Reads")
+  
+  
+  
   y0.2<-Cumulative_Basepairs
   data0.2<-data.frame('x'=x,'y'=y0.2)
   data0.2$group<-"bps yield"
@@ -280,15 +219,15 @@ NanoStatsG<-function(NanoGList,NanoGTable,DataOut,KeepGGObj=FALSE) {
     theme_bw()+
     theme(axis.line = element_line(colour = "black"), panel.border = element_blank(), panel.background = element_blank(), axis.title.x = element_text(size=11),axis.title.y = element_text(size=11))+
     theme(legend.position="bottom")
-    #ggtitle("Cumulative Base Pairs")
+  #ggtitle("Cumulative Base Pairs")
   
   Cumulative_Plot<-grid.arrange(Cumulative_Reads_Plot,Cumulative_Base_Pairs_Plot, nrow=2, ncol=1)
   
   ggsave("Yield.pdf", device="pdf", Cumulative_Plot, height=10,width=15)
-
-
+  
+  
   #PLOT PER-HOUR READS/BPs/QUALITY/LENGTH
-
+  
   y1<-Reads_Per_Hour
   data1<-data.frame('x'=x,'y'=y1)
   data1$group<-"# reads / 30 mins"
@@ -302,7 +241,7 @@ NanoStatsG<-function(NanoGList,NanoGTable,DataOut,KeepGGObj=FALSE) {
     theme_bw()+
     theme(axis.line = element_line(colour = "black"), panel.border = element_blank(), panel.background = element_blank(), axis.title.x = element_text(size=11),axis.title.y = element_text(size=11))+
     theme(legend.position="bottom")
-    #ggtitle("Reads")
+  #ggtitle("Reads")
   
   
   y2<-Base_Pairs_Per_Hour
@@ -319,7 +258,7 @@ NanoStatsG<-function(NanoGList,NanoGTable,DataOut,KeepGGObj=FALSE) {
     theme_bw()+
     theme(axis.line = element_line(colour = "black"), panel.border = element_blank(), panel.background = element_blank(), axis.title.x = element_text(size=11),axis.title.y = element_text(size=11))+
     theme(legend.position="bottom")
-    #ggtitle("Base Pairs")
+  #ggtitle("Base Pairs")
   
   
   y3.0<-log10(Mean_Length_Per_Hour)
@@ -346,7 +285,7 @@ NanoStatsG<-function(NanoGList,NanoGTable,DataOut,KeepGGObj=FALSE) {
     theme_bw()+
     theme(axis.line = element_line(colour = "black"), panel.border = element_blank(), panel.background = element_blank(), axis.title.x = element_text(size=11),axis.title.y = element_text(size=11))+
     theme(legend.position="bottom")
-    #ggtitle("Length")
+  #ggtitle("Length")
   
   y4.0<-Mean_Quality_Score_Per_Hour
   data4.0<-data.frame('x'=x,'y'=y4.0)
@@ -371,7 +310,7 @@ NanoStatsG<-function(NanoGList,NanoGTable,DataOut,KeepGGObj=FALSE) {
     theme_bw()+
     theme(axis.line = element_line(colour = "black"), panel.border = element_blank(), panel.background = element_blank(), axis.title.x = element_text(size=11),axis.title.y = element_text(size=11))+
     theme(legend.position="bottom")
-    #ggtitle("Quality")
+  #ggtitle("Quality")
   
   
   Others_Plot<-grid.arrange(Reads_Per_Hour_Plot,Base_Pairs_Per_Hour_Plot,Length_Per_Hour_Plot,Quality_Score_Per_Hour_Plot, nrow=2, ncol=2)
@@ -404,7 +343,7 @@ NanoStatsG<-function(NanoGList,NanoGTable,DataOut,KeepGGObj=FALSE) {
     scale_fill_brewer(palette="Dark2") +
     blank_theme+
     theme(legend.title=element_blank(),legend.position="bottom")
-    #ggtitle("% Passed and Failed/Skipped ")
+  #ggtitle("% Passed and Failed/Skipped ")
   
   
   Data_Pass_Fail_Tot <- data.frame(
@@ -419,26 +358,26 @@ NanoStatsG<-function(NanoGList,NanoGTable,DataOut,KeepGGObj=FALSE) {
     scale_fill_brewer(palette="Accent") +
     blank_theme+
     theme(legend.title=element_blank(), legend.position="bottom")
-    #ggtitle("# Passed and Failed/Skipped")
+  #ggtitle("# Passed and Failed/Skipped")
   
   #WILL BE SAVED WITH GC CONTENT
   
   
   ###################### LENGTH_VS_QUALITY ######################
-    
-
-    
+  
+  
+  
   limit <- 500000 #limit number of point to plot. Too slow otherwise
-
+  
   if (length(Template_Length) <= limit) {
-
+    
     Tot <- data.frame(cbind(Template_Length,Quality_Score))
     colnames(Tot) <- c("Template_Length","Quality_Score")
-
+    
   }
-
+  
   else { 
-
+    
     message("Too many points for LvsQ scatterplot: rescaling, but mantaining proportions ...")
     tmp <- cbind(Template_Length,Quality_Score)
     Sample <- data.frame(tmp[sample(nrow(tmp), limit),])
@@ -449,12 +388,12 @@ NanoStatsG<-function(NanoGList,NanoGTable,DataOut,KeepGGObj=FALSE) {
     Bound <- tmp[c(indmin_l, indmax_l, indmin_q, indmax_q),]
     Tot<-data.frame(rbind(Sample,Bound))
     colnames(Tot) <- c("Template_Length","Quality_Score")  
-
+    
   }
-
+  
   ScatterTheme <- list(labs(x="length (bps)",y="quality (phred)"),theme_bw(), theme(legend.position=c(1,0),legend.justification=c(1,0), legend.background=element_blank(),legend.direction="horizontal", legend.title=element_text(face="bold.italic")))
-    
-    
+  
+  
   hist_top_mean_length<-ggplot(data.frame(Template_Length), aes(x=Template_Length))+theme_bw()+ geom_histogram(aes(y = ..count../1000),col="darkolivegreen", fill="forestgreen",boundary = min(Template_Length), bins=30)+labs(x="",y=expression("Count"["(10^3)"]))+scale_x_continuous(limits=c(min(Template_Length),max(Template_Length)))
   hist_right_mean_quality<-ggplot(data.frame(Quality_Score), aes(x=Quality_Score))+ theme_bw()+ geom_histogram(aes(y = ..count../1000),col="orangered", fill="darkorange",boundary = min(Quality_Score), bins=30)+ labs(x="",y=expression("Count"["(10^3)"]))+coord_flip()+scale_x_continuous(limits=c(min(Quality_Score),max(Quality_Score)))
   empty <- ggplot()+geom_point(aes(1,1), colour="white")+
@@ -462,57 +401,52 @@ NanoStatsG<-function(NanoGList,NanoGTable,DataOut,KeepGGObj=FALSE) {
           panel.background=element_blank(), 
           axis.text.x=element_blank(), axis.text.y=element_blank(),           
           axis.title.x=element_blank(), axis.title.y=element_blank())
-    
+  
   scatter <- ggplot(Tot,aes(x=Tot$Template_Length, y=Tot$Quality_Score))+geom_point(col="grey27", size=.09, alpha=.4)+scale_x_continuous(limits=c(min(Tot$Template_Length),max(Tot$Template_Length)))+scale_y_continuous(limits=c(min(Tot$Quality_Score),max(Tot$Quality_Score)))+stat_density2d(aes(col=..level.., alpha=..level..)) + scale_color_continuous(low="darkblue",high="darkred") +geom_smooth(method=lm,linetype=2, size=.5,col="black",se=F) + guides(alpha="none",col=guide_legend(title="Density"))+ ScatterTheme
-          
-    
+  
+  
   Length_VS_Quality_Plot<-grid.arrange(hist_top_mean_length, empty, scatter, hist_right_mean_quality, ncol=2, nrow=2, widths=c(4,1), heights=c(1, 4))
-    
-    
+  
+  
   ggsave("LvsQ.pdf", device="pdf", Length_VS_Quality_Plot, height=10,width=15)
   
   
   
   
-  if (!is.na(Table_HDF5_Def[1,3])) { #if muxes are present
-
-    Mux_Numbers<-c(1:4)
-    
-    Chan<-as.numeric(Table_HDF5_Reordered[,2])
-    Mu<-as.numeric(Table_HDF5_Reordered[,3])
-    Le<-as.numeric(Table_HDF5_Reordered[,5])
-    
-    List_Of_Mux<-list()
-    
-    for (iii in 1:length(Channels_Number)) {
-      Ind_Chann<-which(Chan == Channels_Number[iii])
-      Mux_Associated_Number<-sort(Mu[Ind_Chann])
-      Table_Mux<-c()
-      for (lll in 1:length(Mux_Numbers)) {
-        Ind_Mux<-which(Mux_Associated_Number == Mux_Numbers[lll])
-        Chan_Mux<-Chan[Ind_Chann][Ind_Mux]
-        if (length(Chan_Mux) == 0) {
-          Mux<-NA
-          Lenght_Per_Mux<-NA
-          Table_Mu<-cbind(NA, NA, NA)
-          Table_Mux<-rbind(Table_Mux,Table_Mu)
-        }
-        else {
-          Mux<-Mu[Ind_Chann][Ind_Mux]
-          Lenght_Per_Mux<-sum(Le[Ind_Chann][Ind_Mux])
-          Table_Mu<-cbind(unique(Chan_Mux), unique(Mux),Lenght_Per_Mux)
-          Table_Mux<-rbind(Table_Mux,Table_Mu)
-        }
-      }
-      List_Of_Mux[[iii]]<-Table_Mux
-    }
-    
-    Table_Mux_Def<-do.call(rbind,List_Of_Mux)
-
-  }
-
-  ### else skip muxes rapresentation. Table_Mux_Def does not exist in the environment
   
+  Mux_Numbers<-c(1:4)
+  
+  Chan<-as.numeric(Table_HDF5_Reordered[,2])
+  Mu<-as.numeric(Table_HDF5_Reordered[,3])
+  Le<-as.numeric(Table_HDF5_Reordered[,5])
+  
+  List_Of_Mux<-list()
+  
+  for (iii in 1:length(Channels_Number)) {
+    Ind_Chann<-which(Chan == Channels_Number[iii])
+    Mux_Associated_Number<-sort(Mu[Ind_Chann])
+    Table_Mux<-c()
+    for (lll in 1:length(Mux_Numbers)) {
+      Ind_Mux<-which(Mux_Associated_Number == Mux_Numbers[lll])
+      Chan_Mux<-Chan[Ind_Chann][Ind_Mux]
+      if (length(Chan_Mux) == 0) {
+        Mux<-NA
+        Lenght_Per_Mux<-NA
+        Table_Mu<-cbind(NA, NA, NA)
+        Table_Mux<-rbind(Table_Mux,Table_Mu)
+      }
+      else {
+        Mux<-Mu[Ind_Chann][Ind_Mux]
+        Lenght_Per_Mux<-sum(Le[Ind_Chann][Ind_Mux])
+        Table_Mu<-cbind(unique(Chan_Mux), unique(Mux),Lenght_Per_Mux)
+        Table_Mux<-rbind(Table_Mux,Table_Mu)
+      }
+    }
+    List_Of_Mux[[iii]]<-Table_Mux
+  }
+  
+  Table_Mux_Def<-do.call(rbind,List_Of_Mux)
+    
   
   #PLOT CORRELATION MATRIXES (CHANNEL (AND MUXES))
   
@@ -536,61 +470,57 @@ NanoStatsG<-function(NanoGList,NanoGTable,DataOut,KeepGGObj=FALSE) {
   mdef4<-rbind(m9,m10,m11,m12,m13,m14,m15,m16)
   Matrixbpchannel<-cbind(mdef3,mdef4)
   
-
-
-  if (exists("Table_Mux_Def", envir=environment())) {
-
-
-    BasePairs_Per_Mux<-as.numeric(Table_Mux_Def[,3])
-    
-    First_Eight_Disposition<-c(3,4,1,2,6,5,8,7)
-    Second_Eight_Disposition<-Increment(First_Eight_Disposition)
-    Third_Eight_Disposition<-Increment(Second_Eight_Disposition)
-    Fouth_Eight_Disposition<-Increment(Third_Eight_Disposition)
-    First_Line<-c(First_Eight_Disposition,Second_Eight_Disposition,Third_Eight_Disposition,Fouth_Eight_Disposition)
-    Second_Line<-Increment2(First_Line)
-    Third_Line<-Increment2(Second_Line)
-    Fourth_Line<-Increment2(Third_Line)
-    First_Block<-c(First_Line,Second_Line,Third_Line,Fourth_Line)
-    Second_Block<-Increment3(First_Block)
-    Third_Block<-Increment3(Second_Block)
-    Fourth_Block<-Increment3(Third_Block)
-    Fifth_Block<-Increment3(Fourth_Block)
-    Sixth_Block<-Increment3(Fifth_Block)
-    Seventh_Block<-Increment3(Sixth_Block)
-    Eight_Block<-Increment3(Seventh_Block)
-    Ninth_Block<-Increment3(Eight_Block)
-    Tenth_Block<-Increment3(Ninth_Block)
-    Eleventh_Block<-Increment3(Tenth_Block)
-    Twelfth_Block<-Increment3(Eleventh_Block)
-    Thirtheenth_Block<-Increment3(Twelfth_Block)
-    Fourtheenth_Block<-Increment3(Thirtheenth_Block)
-    Fiftheenth_Block<-Increment3(Fourtheenth_Block)
-    Sixtheenth_Block<-Increment3(Fiftheenth_Block)
-    
-    M1<-matrix(BasePairs_Per_Mux[First_Block], ncol= 32, nrow= 4, byrow=TRUE)
-    M2<-matrix(BasePairs_Per_Mux[Fiftheenth_Block], ncol= 32, nrow= 4, byrow=TRUE)
-    M3<-matrix(BasePairs_Per_Mux[Thirtheenth_Block], ncol= 32, nrow= 4, byrow=TRUE)
-    M4<-matrix(BasePairs_Per_Mux[Eleventh_Block], ncol= 32, nrow= 4, byrow=TRUE)
-    M5<-matrix(BasePairs_Per_Mux[Ninth_Block], ncol= 32, nrow= 4, byrow=TRUE)
-    M6<-matrix(BasePairs_Per_Mux[Seventh_Block], ncol= 32, nrow= 4, byrow=TRUE)
-    M7<-matrix(BasePairs_Per_Mux[Fifth_Block], ncol= 32, nrow= 4, byrow=TRUE)
-    M8<-matrix(BasePairs_Per_Mux[Third_Block], ncol= 32, nrow= 4, byrow=TRUE)
-    Mdef3<-rbind(M1,M2,M3,M4,M5,M6,M7,M8)
-    M9<-rotate(matrix(BasePairs_Per_Mux[Second_Block], ncol= 32, nrow= 4, byrow=TRUE))
-    M10<-rotate(matrix(BasePairs_Per_Mux[Sixtheenth_Block],ncol= 32, nrow= 4, byrow=TRUE))
-    M11<-rotate(matrix(BasePairs_Per_Mux[Fourtheenth_Block], ncol= 32, nrow= 4, byrow=TRUE))
-    M12<-rotate(matrix(BasePairs_Per_Mux[Twelfth_Block], ncol= 32, nrow= 4, byrow=TRUE))
-    M13<-rotate(matrix(BasePairs_Per_Mux[Tenth_Block], ncol= 32, nrow= 4, byrow=TRUE))
-    M14<-rotate(matrix(BasePairs_Per_Mux[Eight_Block], ncol= 32, nrow= 4, byrow=TRUE))
-    M15<-rotate(matrix(BasePairs_Per_Mux[Sixth_Block], ncol= 32, nrow= 4, byrow=TRUE))
-    M16<-rotate(matrix(BasePairs_Per_Mux[Fourth_Block], ncol= 32, nrow= 4, byrow=TRUE))
-    Mdef4<-rbind(M9,M10,M11,M12,M13,M14,M15,M16)
-    MatrixMuxActivity<-cbind(Mdef3,Mdef4)
-
-  }
-
-
+  
+  
+  BasePairs_Per_Mux<-as.numeric(Table_Mux_Def[,3])
+  
+  First_Eight_Disposition<-c(3,4,1,2,6,5,8,7)
+  Second_Eight_Disposition<-Increment(First_Eight_Disposition)
+  Third_Eight_Disposition<-Increment(Second_Eight_Disposition)
+  Fouth_Eight_Disposition<-Increment(Third_Eight_Disposition)
+  First_Line<-c(First_Eight_Disposition,Second_Eight_Disposition,Third_Eight_Disposition,Fouth_Eight_Disposition)
+  Second_Line<-Increment2(First_Line)
+  Third_Line<-Increment2(Second_Line)
+  Fourth_Line<-Increment2(Third_Line)
+  First_Block<-c(First_Line,Second_Line,Third_Line,Fourth_Line)
+  Second_Block<-Increment3(First_Block)
+  Third_Block<-Increment3(Second_Block)
+  Fourth_Block<-Increment3(Third_Block)
+  Fifth_Block<-Increment3(Fourth_Block)
+  Sixth_Block<-Increment3(Fifth_Block)
+  Seventh_Block<-Increment3(Sixth_Block)
+  Eight_Block<-Increment3(Seventh_Block)
+  Ninth_Block<-Increment3(Eight_Block)
+  Tenth_Block<-Increment3(Ninth_Block)
+  Eleventh_Block<-Increment3(Tenth_Block)
+  Twelfth_Block<-Increment3(Eleventh_Block)
+  Thirtheenth_Block<-Increment3(Twelfth_Block)
+  Fourtheenth_Block<-Increment3(Thirtheenth_Block)
+  Fiftheenth_Block<-Increment3(Fourtheenth_Block)
+  Sixtheenth_Block<-Increment3(Fiftheenth_Block)
+  
+  M1<-matrix(BasePairs_Per_Mux[First_Block], ncol= 32, nrow= 4, byrow=TRUE)
+  M2<-matrix(BasePairs_Per_Mux[Fiftheenth_Block], ncol= 32, nrow= 4, byrow=TRUE)
+  M3<-matrix(BasePairs_Per_Mux[Thirtheenth_Block], ncol= 32, nrow= 4, byrow=TRUE)
+  M4<-matrix(BasePairs_Per_Mux[Eleventh_Block], ncol= 32, nrow= 4, byrow=TRUE)
+  M5<-matrix(BasePairs_Per_Mux[Ninth_Block], ncol= 32, nrow= 4, byrow=TRUE)
+  M6<-matrix(BasePairs_Per_Mux[Seventh_Block], ncol= 32, nrow= 4, byrow=TRUE)
+  M7<-matrix(BasePairs_Per_Mux[Fifth_Block], ncol= 32, nrow= 4, byrow=TRUE)
+  M8<-matrix(BasePairs_Per_Mux[Third_Block], ncol= 32, nrow= 4, byrow=TRUE)
+  Mdef3<-rbind(M1,M2,M3,M4,M5,M6,M7,M8)
+  M9<-rotate(matrix(BasePairs_Per_Mux[Second_Block], ncol= 32, nrow= 4, byrow=TRUE))
+  M10<-rotate(matrix(BasePairs_Per_Mux[Sixtheenth_Block],ncol= 32, nrow= 4, byrow=TRUE))
+  M11<-rotate(matrix(BasePairs_Per_Mux[Fourtheenth_Block], ncol= 32, nrow= 4, byrow=TRUE))
+  M12<-rotate(matrix(BasePairs_Per_Mux[Twelfth_Block], ncol= 32, nrow= 4, byrow=TRUE))
+  M13<-rotate(matrix(BasePairs_Per_Mux[Tenth_Block], ncol= 32, nrow= 4, byrow=TRUE))
+  M14<-rotate(matrix(BasePairs_Per_Mux[Eight_Block], ncol= 32, nrow= 4, byrow=TRUE))
+  M15<-rotate(matrix(BasePairs_Per_Mux[Sixth_Block], ncol= 32, nrow= 4, byrow=TRUE))
+  M16<-rotate(matrix(BasePairs_Per_Mux[Fourth_Block], ncol= 32, nrow= 4, byrow=TRUE))
+  Mdef4<-rbind(M9,M10,M11,M12,M13,M14,M15,M16)
+  MatrixMuxActivity<-cbind(Mdef3,Mdef4)
+  
+  
+  
   #PLOTTING "FALSE" CORRELATION MATRIXES
   
   Palette <- colorRampPalette(brewer.pal(9, "Reds"))
@@ -606,46 +536,32 @@ NanoStatsG<-function(NanoGList,NanoGTable,DataOut,KeepGGObj=FALSE) {
           panel.background=element_blank(),panel.border=element_blank(),panel.grid.major=element_blank(),
           panel.grid.minor=element_blank(),plot.background=element_blank(),legend.text=element_text(size=10),legend.text.align = 0)+
     guides(fill = guide_colorbar(barwidth= 61,barheight=.5,title="channels activity (# bps)", title.position="top",title.hjust=0.5))
-    #ggtitle("Channels Activity")
+  #ggtitle("Channels Activity")
   
   #ggsave("Activity.pdf", device="pdf",Plot_Channel_Activity, height=10, width=18)
-
-
-
-  if (exists("MatrixMuxActivity", envir=environment())) {
-
-
-    adjMatrixMuxActivity<-melt(rotate(t(MatrixMuxActivity)))
-    Plot_Mux_Activity<-ggplot(data=adjMatrixMuxActivity, aes(x=Var1, y=Var2)) +
-      geom_tile(aes(fill=value), color="white", size=2)+
-      scale_fill_gradientn(colours=Palette(4), na.value="grey70",limits=c(min(adjMatrixMuxActivity[,3], na.rm=TRUE), max(adjMatrixMuxActivity[,3], na.rm=TRUE))) +
-      theme(axis.line=element_blank(),axis.text.x=element_blank(),
-            axis.text.y=element_blank(),axis.ticks=element_blank(),
-            axis.title.x=element_blank(),
-            axis.title.y=element_blank(),legend.position="bottom",
-            panel.background=element_blank(),panel.border=element_blank(),panel.grid.major=element_blank(),
-            panel.grid.minor=element_blank(),plot.background=element_blank(),legend.text=element_text(size=10))+
-      guides(fill = guide_colorbar(barwidth= 61, barheight=.5,title="muxes activity (# bps)", title.position="top",title.hjust=0.5))
-      #ggtitle("Muxes Activity")
-    
-    
-    Plot_Tot<-grid.arrange(Plot_Channel_Activity,Plot_Mux_Activity,nrow=2, ncol=1, widths=15, heights=c(12,12))
-
-    ggsave("Activity.pdf", device="pdf",Plot_Tot, height=10, width=18)
-
-
-  }
-
-
-  else {
-
-    ggsave("Activity.pdf", device="pdf",Plot_Channel_Activity, height=10, width=18)
-
-  }
+  
+  
+  adjMatrixMuxActivity<-melt(rotate(t(MatrixMuxActivity)))
+  Plot_Mux_Activity<-ggplot(data=adjMatrixMuxActivity, aes(x=Var1, y=Var2)) +
+    geom_tile(aes(fill=value), color="white", size=2)+
+    scale_fill_gradientn(colours=Palette(4), na.value="grey70",limits=c(min(adjMatrixMuxActivity[,3], na.rm=TRUE), max(adjMatrixMuxActivity[,3], na.rm=TRUE))) +
+    theme(axis.line=element_blank(),axis.text.x=element_blank(),
+          axis.text.y=element_blank(),axis.ticks=element_blank(),
+          axis.title.x=element_blank(),
+          axis.title.y=element_blank(),legend.position="bottom",
+          panel.background=element_blank(),panel.border=element_blank(),panel.grid.major=element_blank(),
+          panel.grid.minor=element_blank(),plot.background=element_blank(),legend.text=element_text(size=10))+
+    guides(fill = guide_colorbar(barwidth= 61, barheight=.5,title="muxes activity (# bps)", title.position="top",title.hjust=0.5))
+  #ggtitle("Muxes Activity")
+  
+  
+  Plot_Tot<-grid.arrange(Plot_Channel_Activity,Plot_Mux_Activity,nrow=2, ncol=1, widths=15, heights=c(12,12))
+  
+  ggsave("Activity.pdf", device="pdf",Plot_Tot, height=10, width=18)
+  
   
   
   ###PLOT GC CONTENT#######
-  
   
   
   if (NanoTable2[1,7] == "GC_Content") {
@@ -656,7 +572,7 @@ NanoStatsG<-function(NanoGList,NanoGTable,DataOut,KeepGGObj=FALSE) {
     print(Data_Pass_Fail_Percentage_Plot, vp=define_region(1, 1))
     print(Data_Pass_Fail_Tot_Plot, vp = define_region(1, 2))
     dev.off()
-
+    
   }
   
   else {
@@ -673,7 +589,7 @@ NanoStatsG<-function(NanoGList,NanoGTable,DataOut,KeepGGObj=FALSE) {
   }
   
   ###Get major stats###
-
+  
   Longest <- max(Template_Length)
   Shortest <- min(Template_Length)
   MeanDim <- mean(Template_Length)
@@ -686,54 +602,48 @@ NanoStatsG<-function(NanoGList,NanoGTable,DataOut,KeepGGObj=FALSE) {
   Failed_num<-List.Files.HDF5_Fail_Length
   Passed_rat<-List.Files.HDF5_Pass.length/(List.Files.HDF5_Pass.length+List.Files.HDF5_Fail_Length)
   Failed_rat<-List.Files.HDF5_Fail_Length/(List.Files.HDF5_Pass.length+List.Files.HDF5_Fail_Length)
-
-
-  dfval <- rbind(Label, Longest,Shortest,MeanDim,MedianDim,HQ, LQ, MeanQ, MedianQ, Cumulative_Basepairs[length(Cumulative_Basepairs)],Passed_num, Failed_num, Passed_rat, Failed_rat)
-  rownames(dfval) <- c('Sample','Longest sequence (bps)', 'Shortest sequence (bps)', 'Mean length (bps)', 'Median length (bps)', 'Highest quality sequence (phred)', 'Lowest quality sequence (phred)', 'Mean quality (phred)', 'Median quality (phred)', 'Passed reads throughput (bps)', '# passed reads', '# failed/skipped reads', 'Ratio passed', 'Ratio failed/skipped')
-
-
+  
+  
+  dfval <- rbind(Longest,Shortest,MeanDim,MedianDim,HQ, LQ, MeanQ, MedianQ, Cumulative_Basepairs[length(Cumulative_Basepairs)],Passed_num, Failed_num, Passed_rat, Failed_rat)
+  rownames(dfval) <- c('Longest sequence (bps)', 'Shortest sequence (bps)', 'Mean length (bps)', 'Median length (bps)', 'Highest quality sequence (phred)', 'Lowest quality sequence (phred)', 'Mean quality (phred)', 'Median quality (phred)', 'Passed reads throughput (bps)', '# passed reads', '# failed/skipped reads', 'Ratio passed', 'Ratio failed/skipped')
+  
+  
   write.table(dfval,file.path(Directory, 'ShortSummary.txt'),col.names=F, sep="\t", row.names=T, quote=F)
-
+  
   #save data for NanoCompare
-
+  
   Comparison_Directory<-file.path(Directory, 'DataForComparison')
   dir.create(Comparison_Directory, showWarnings = FALSE)
-
+  
   write.table(data1, file.path(Comparison_Directory, "Reads.txt"),col.names=T, sep="\t")
   write.table(data2, file.path(Comparison_Directory, "Bases.txt"),col.names=T, sep="\t")
   write.table(data3.0.0, file.path(Comparison_Directory, "Length.txt"),col.names=T, sep="\t")
   write.table(data4.0, file.path(Comparison_Directory, "Quality.txt"),col.names=T, sep="\t")
   
   if (KeepGGObj == TRUE) {
-
-      GG_Directory<-file.path(Directory, 'GGTables')
-      dir.create(GG_Directory, showWarnings = FALSE)
-      write.table(data0.1,file.path(GG_Directory, 'Yield_reads.txt'),col.names=T, sep="\t", row.names=F, quote=F)
-      write.table(data0.2,file.path(GG_Directory, 'Yield_bps.txt'),col.names=T, sep="\t", row.names=F, quote=F)
-      write.table(data1,file.path(GG_Directory, 'RBLQ_reads.txt'),col.names=T, sep="\t", row.names=F, quote=F)
-      write.table(data2,file.path(GG_Directory, 'RBLQ_bps.txt'),col.names=T, sep="\t", row.names=F, quote=F)
-      write.table(data3,file.path(GG_Directory, 'RBLQ_length.txt'),col.names=T, sep="\t", row.names=F, quote=F)
-      write.table(data4,file.path(GG_Directory, 'RBLQ_quality.txt'),col.names=T, sep="\t", row.names=F, quote=F)
-      write.table(Data_Pass_Fail_Percentage,file.path(GG_Directory, 'PFGC_percentage.txt'),col.names=T, sep="\t", row.names=F, quote=F)
-      write.table(Data_Pass_Fail_Tot,file.path(GG_Directory, 'PFGC_number.txt'),col.names=T, sep="\t", row.names=F, quote=F)
-      write.table(Tot,file.path(GG_Directory, 'LvsQ_scatter.txt'),col.names=T, sep="\t", row.names=F, quote=F)
-      write.table(adjMatrixbpchannel,file.path(GG_Directory, 'Activity_channels.txt'),col.names=T, sep="\t", row.names=F, quote=F)
-
-      if (NanoTable2[1,7] != "GC_Content") {
-
-        write.table(data.frame(GC_Content_To_Plot),file.path(GG_Directory, 'PFGC_GCC.txt'),col.names=T, sep="\t", row.names=F, quote=F)
-
-      }
-
-
-      if (exists("adjMatrixMuxActivity", envir=environment())) {
-
-        write.table(adjMatrixbpchannel,file.path(GG_Directory, 'Activity_muxes.txt'),col.names=T, sep="\t", row.names=F, quote=F)
-
-
-      }
+    
+    GG_Directory<-file.path(Directory, 'GGTables')
+    dir.create(GG_Directory, showWarnings = FALSE)
+    write.table(data0.1,file.path(GG_Directory, 'Yield_reads.txt'),col.names=T, sep="\t", row.names=F, quote=F)
+    write.table(data0.2,file.path(GG_Directory, 'Yield_bps.txt'),col.names=T, sep="\t", row.names=F, quote=F)
+    write.table(data1,file.path(GG_Directory, 'RBLQ_reads.txt'),col.names=T, sep="\t", row.names=F, quote=F)
+    write.table(data2,file.path(GG_Directory, 'RBLQ_bps.txt'),col.names=T, sep="\t", row.names=F, quote=F)
+    write.table(data3,file.path(GG_Directory, 'RBLQ_length.txt'),col.names=T, sep="\t", row.names=F, quote=F)
+    write.table(data4,file.path(GG_Directory, 'RBLQ_quality.txt'),col.names=T, sep="\t", row.names=F, quote=F)
+    write.table(Data_Pass_Fail_Percentage,file.path(GG_Directory, 'PFGC_percentage.txt'),col.names=T, sep="\t", row.names=F, quote=F)
+    write.table(Data_Pass_Fail_Tot,file.path(GG_Directory, 'PFGC_number.txt'),col.names=T, sep="\t", row.names=F, quote=F)
+    write.table(Tot,file.path(GG_Directory, 'LvsQ_scatter.txt'),col.names=T, sep="\t", row.names=F, quote=F)
+    write.table(adjMatrixbpchannel,file.path(GG_Directory, 'Activity_channels.txt'),col.names=T, sep="\t", row.names=F, quote=F)
+    
+    if (NanoTable2[1,7] != "GC_Content") {
+      
+      write.table(data.frame(GC_Content_To_Plot),file.path(GG_Directory, 'PFGC_GCC.txt'),col.names=T, sep="\t", row.names=F, quote=F)
+      
+    }
+    
+    
   }
-
+  
   message("Done")    
   
 }

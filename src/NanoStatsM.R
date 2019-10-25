@@ -1,35 +1,31 @@
-
 ############################################ NanoStatsM ############################################
 
-#' @title Plots statistics
-#' @description NanoStatsM plots statistics parsing the metadata table returned by NanoTableM
-#' @param NanoMList Object of class list returned by NanoPrepareM
-#' @param NanoMTable Metadata table returned by NanoTableM
-#' @param DataOut Where results will be saved. Use the same directory specified as "DataOut" for NanoTableM
-#' @param KeepGGObj Store data.frames for ggplot plots in folder. Useful for personalize plot colors. Default to FALSE.
+#' @title NanoStatsM
+#' @description Plot statistics
+#' @param NanoMList Object of class list from NanoPrepareM
+#' @param NanoMTable  Object of class matrix from NanoTableM
+#' @param DataOut Output folder (the same used for NanoTableM)
+#' @param KeepGGObj Logical. If TRUE, store ggplot2 data frames behind generated plots [FALSE]
 #' @return Plots: \cr 
 #' - Yield.pdf (accumulation of reads and bps); \cr 
 #' - RBLQ.pdf (# reads, # bps, length and quality overview every 30 minutes of experiment); \cr 
 #' - LvQ.pdf (length and quality compared jointly); \cr 
-#' - PFGC.pdf (passed and failed reads, GC content if previously computed); \cr 
+#' - PFGC.pdf (passed and failed reads, GC content if computed); \cr 
 #' - Activity.pdf (channels and muxes activity (# bps). Inactive channels and muxes are grey-colored) \cr
-#' Tables: \cr
-#' - metadata.fltrd.txt (metadata table for high-quality passed sequence)
-#' - ShortSummary.txt (table with major statistics for the experiment)
+#' Table: \cr
+#' - summary.txt (table with major statistics for the sequencing run)
 #' @examples
 #' #do not run
-#' DataOut <- "/path/to/DataOut"
-#' # Need a list previously generated with NanoPrepareM()
-#' # Need a table previously generated with NanoTableM()
-#' # If List from NanoPrepareM() and Table from NanoTableM() exist: 
-#' # Do not save ggplot2 tables:
+#' #assume List is the output from NanoPrepareM and Table from NanoTableM
+#' #assume DataOut is the same output specified for NanoTableM
+#' #do not store ggplot2 tables:
 #' NanoStatsM(List,Table, DataOut=DataOut)
-#' # Save ggplot2 tables:
+#' #store ggplot2 tables:
 #' NanoStatsM(List,Table, DataOut=DataOut,KeepGGObj=TRUE)
 
 
 
-NanoStatsM<-function(NanoMList,NanoMTable,DataOut, KeepGGObj=FALSE) {
+NanoStatsM<-function(NanoMList,NanoMTable,DataOut,KeepGGObj=FALSE) {
   
   library(reshape2)
   library(scales)
@@ -38,13 +34,11 @@ NanoStatsM<-function(NanoMList,NanoMTable,DataOut, KeepGGObj=FALSE) {
   library(grid)
   library(gridExtra)
   
-  label<-as.character(NanoMList[[4]])
-  Directory<-file.path(DataOut, label)
-  
+  Directory<-file.path(DataOut) 
   TableInDirectory<-list.files(Directory,pattern="metadata.txt")
   
   if(length(TableInDirectory) == 0) {
-    stop("Use the same directory specified for NanoTableM function")
+    stop("Use the same directory specified for NanoTableM")
   }
   
   CumulativeInDirectory<-list.files(Directory,pattern=("Yield.pdf"))
@@ -86,31 +80,27 @@ NanoStatsM<-function(NanoMList,NanoMTable,DataOut, KeepGGObj=FALSE) {
   options(scipen=9999)
   
   FilesAnalyzed<-which(as.character(NanoMTable[,1]) != "Read_Id")
-  Length_Not_Analyzed<-length(which(as.character(NanoMTable[,1]) == "Read_Id"))
+  Length_Not_Analyzed<-nrow(NanoMTable)-length(FilesAnalyzed)
+
   NanoTable<-NanoMTable[FilesAnalyzed,]
   Really_Pass_File<-which(as.numeric(NanoTable[,6]) >= 7)
-  Fail_File_Length<-length(which(as.numeric(NanoTable[,6]) < 7))
-  NanoTable<-NanoTable[Really_Pass_File,]
-  List.Files.HDF5_Fail_Length<-as.numeric(NanoMList[[2]])+Length_Not_Analyzed+Fail_File_Length
-  List.Files.HDF5_Pass.length<-nrow(NanoTable)
-  List.Files.HDF5_Skip_Length<-as.numeric(NanoMList[[3]])
+  Fail_File_Length<-nrow(NanoTable)-length(Really_Pass_File)
 
-  write.table(NanoTable, file.path(Directory, "metadata.fltrd.txt"), col.names=T, row.names=F, quote=F, sep="\t") #overwrite previous
+  NanoTable<-NanoTable[Really_Pass_File,]
+
+  List.Files.HDF5_Fail_Length<-NanoMList$failed+Length_Not_Analyzed+Fail_File_Length
+  List.Files.HDF5_Pass.length<-nrow(NanoTable)
+  List.Files.HDF5_Skip_Length<-NanoMList$skipped
   
   Table_HDF5_Def<-NanoTable[,1:6]
   Time_2<-as.numeric(Table_HDF5_Def[,4]) 
   Run_Duration<-round(as.numeric(difftime(as.POSIXct(max(Time_2),origin="1/1/1970"), as.POSIXct(min(Time_2), origin="1/1/1970"), units="hours"))) 
   Relative_Time <- scales::rescale(Time_2, to=c(0,Run_Duration))
-  #Table_HDF5_Def<-cbind(Table_HDF5,Time_Rescaled)
-  
-  #colnames(Table_HDF5_Def)<-c("Read", "Channel Number", "Mux Number", "Unix Time", "Length of Read", "Quality", "Relative Experimental Time") #no need to rename cols
-    
-  #Relative_Time<-as.numeric(Table_HDF5_Def[,7])
+
   Relative_Time_Per_Hours<-seq(from=min(round(Relative_Time)), to=max(round(Relative_Time)), by=0.5)
   Template_Length<-as.numeric(Table_HDF5_Def[,5])
   Quality_Score<-as.numeric(Table_HDF5_Def[,6])
   
-
   message("Analyzing...")
   
   Reads_Per_Hour<-rep(0, length(Relative_Time_Per_Hours))
@@ -162,7 +152,6 @@ NanoStatsM<-function(NanoMList,NanoMTable,DataOut, KeepGGObj=FALSE) {
   }
 
   
-  
   Cumulative_Reads<-cumsum(Reads_Per_Hour)
   Cumulative_Basepairs<-cumsum(Base_Pairs_Per_Hour)
   
@@ -188,18 +177,16 @@ NanoStatsM<-function(NanoMList,NanoMTable,DataOut, KeepGGObj=FALSE) {
 
     }    
 
-
     else {
+      
       Table_HDF5_Re[[iii]]<-Table_HDF5_Def[Ind_Chann,][Mux_Associated,]
-      #Table_HDF5_Reordered<-rbind(Table_HDF5_Reordered,Table_HDF5_Re) slow for very large tables
+
     }
     Base_Pairs_Per_Channel[iii]<-sum(Template_Length[Ind_Chann])
   }
 
-  Table_HDF5_Reordered<-do.call(rbind,Table_HDF5_Re) # a lot faster
-  
-  #rownames(Table_HDF5_Reordered)<-c()
-  
+  Table_HDF5_Reordered<-do.call(rbind,Table_HDF5_Re)
+    
   
   #PLOT CUMULATIVE READS/BP
 
@@ -223,7 +210,6 @@ NanoStatsM<-function(NanoMList,NanoMTable,DataOut, KeepGGObj=FALSE) {
     theme(legend.position="bottom")
     #ggtitle("Cumulative Reads")
  
-
 
   y0.2<-Cumulative_Basepairs
   data0.2<-data.frame('x'=x,'y'=y0.2)
@@ -467,10 +453,7 @@ NanoStatsM<-function(NanoMList,NanoMTable,DataOut, KeepGGObj=FALSE) {
   }
   
   Table_Mux_Def<-do.call(rbind,List_Of_Mux)
-  
-  
-  #colnames(Table_Mux_Def)<-c("Channel Number", "Mux Number", "Total Reads Produced Per Mux")
-  
+    
   #PLOT CORRELATION MATRIXES (CHANNEL AND MUXES)
   
   m1<-matrix(Base_Pairs_Per_Channel[1:32], ncol=8, nrow=4, byrow=TRUE)
@@ -576,8 +559,6 @@ NanoStatsM<-function(NanoMList,NanoMTable,DataOut, KeepGGObj=FALSE) {
   
   ggsave("Activity.pdf", device="pdf",Plot_Tot, height=10, width=18)
 
-
-  
   
   ###PLOT GC CONTENT#######
 
@@ -607,9 +588,6 @@ NanoStatsM<-function(NanoMList,NanoMTable,DataOut, KeepGGObj=FALSE) {
     dev.off()
   }
   
-
-  ###Get major stats###
-
   Longest <- max(Template_Length)
   Shortest <- min(Template_Length)
   MeanDim <- mean(Template_Length)
@@ -624,11 +602,11 @@ NanoStatsM<-function(NanoMList,NanoMTable,DataOut, KeepGGObj=FALSE) {
   Failed_rat<-((List.Files.HDF5_Fail_Length+List.Files.HDF5_Skip_Length)/(List.Files.HDF5_Pass.length+List.Files.HDF5_Fail_Length+List.Files.HDF5_Skip_Length))
 
 
-  dfval <- rbind(label, Longest,Shortest,MeanDim,MedianDim,HQ, LQ, MeanQ, MedianQ, Cumulative_Basepairs[length(Cumulative_Basepairs)],Passed_num, Failed_num, Passed_rat, Failed_rat)
-  rownames(dfval) <- c('Sample','Longest sequence (bps)', 'Shortest sequence (bps)', 'Mean length (bps)', 'Median length (bps)', 'Highest quality sequence (phred)', 'Lowest quality sequence (phred)', 'Mean quality (phred)', 'Median quality (phred)', 'Passed reads throughput (bps)', '# passed reads', '# failed/skipped reads', 'Ratio passed', 'Ratio failed/skipped')
+  dfval <- rbind(Longest,Shortest,MeanDim,MedianDim,HQ, LQ, MeanQ, MedianQ, Cumulative_Basepairs[length(Cumulative_Basepairs)],Passed_num, Failed_num, Passed_rat, Failed_rat)
+  rownames(dfval) <- c('Longest sequence (bps)', 'Shortest sequence (bps)', 'Mean length (bps)', 'Median length (bps)', 'Highest quality sequence (phred)', 'Lowest quality sequence (phred)', 'Mean quality (phred)', 'Median quality (phred)', 'Passed reads throughput (bps)', '# passed reads', '# failed/skipped reads', 'Ratio passed', 'Ratio failed/skipped')
 
 
-  write.table(dfval,file.path(Directory, 'ShortSummary.txt'),col.names=F, sep="\t", row.names=T, quote=F)
+  write.table(dfval,file.path(Directory, 'summary.txt'),col.names=F, sep="\t", row.names=T, quote=F)
 
   #save data for NanoCompare
 

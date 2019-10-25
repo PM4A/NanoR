@@ -1,21 +1,22 @@
 ############################################ NanoCompare ############################################
 
 
-#' @title Compare ONT experiments 
-#' @description NanoCompare fast build violin plots, comparing MinION and GridION X5 experiments analyzed with the other functions from this package. Bins of 30 minutes are taken.
-#' @param DataIn  Character vector with paths to "DataForComparison" for each experiment
-#' @param DataOut Where results will be saved.
-#' @param Labels Character vector containing ordered labels to name experiments in "DataIn"
+#' @title NanoComapre
+#' @description Compare ONT experiments
+#' @param DataIn  Object of class character with paths to DataForComparison for each experiment
+#' @param DataOut Output folder
+#' @param Labels Object of class character with (ordered) labels for each experiment
 #' @return Plot: \cr 
 #' - Violins.pdf; \cr
 #' @examples
 #' #do not run
-#' DataIn<-c("Path/To/AnalyzedFolder1/DataForComparison","Path/To/AnalyzedFolder2/DataForComparison",...)
-#' Labels<-c("Label1","Label2") #labels
-#' NanoCompare(DataIn=DataIn,DataOut="Path/To/DataOut",Labels=Labels) #compare
+#' DataIn<-c("/path/to/folder1/DataForComparison","/path/to/folder2/DataForComparison",...)
+#' Labels<-c("first","second")
+#' DataOut <- "/path/to/output"
+#' NanoCompare(DataIn=DataIn,DataOut=DataOut,Labels=Labels)
 
 
-NanoCompare<-function(DataIn,DataOut,Labels) { #Now is a lot faster and can deal with theoretically any number of experiments
+NanoCompare<-function(DataIn,DataOut,Labels) {
   
   library(ggplot2)
   library(RColorBrewer)
@@ -259,13 +260,6 @@ NanoCompare<-function(DataIn,DataOut,Labels) { #Now is a lot faster and can deal
   pushViewport(viewport(layout = grid.layout(1, 1)))
   print(p_quality_single, vp=define_region(1, 1))
   dev.off()
-
-
-
-
-  ###SPEEDTEST ### 
-
-  ## it would be nice to have a plot for speed test in terms of bps productivity but for the moment just rely on the others for a complete overview
 
 
 

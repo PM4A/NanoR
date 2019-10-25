@@ -2,49 +2,24 @@
 ############################################ NanoTableG ############################################
 
 
-#' @title Generates metadata table
-#' @description NanoTableG filters the sequencing summary table retaining only the most-useful statistics and optionall extract GC content from .fastq files
-#' @param NanoGList Object of class list returned by NanoPrepareG
-#' @param DataOut Where the metadata table will be saved. Do not use a directory that already contains other results.
-#' @param GCC  Logical. If TRUE, NanoTableG computes GC content for each sequence in .fastq files. Default to FALSE. Calculating GCC can be slow in R.
-#' @return Metadata table with 7 columns
+#' @title NanoTableG
+#' @description Generate a metadata table
+#' @param NanoGList Object of class list from NanoPrepareG
+#' @param DataOut Output folder
+#' @param GCC  Logical. If TRUE, compute GC content from FASTQ [FALSE]
+#' @return Object of class matrix
 #' @examples
 #' #do not run
-#' DataOut <- "/path/to/DataOut"
-#' # Need a list previously generated with NanoPrepareG()
-#' # If List from NanoPrepareM() exists:
-#' # Skip GC content calculation
-#' Table<-NanoTableG(List, DataOut)
-#' # Calculate GC content
-#' Table<-NanoTableG(List, DataOut, GCC=TRUE)
+#' #assume List is the output from NanoPrepareG
+#' DataOut <- "/path/to/output"
+#' Table<-NanoTableG(List,DataOut)
+#' #include GC content
+#' Table<-NanoTableM(List,DataOut,GCC=TRUE) 
 
 
-NanoTableG<-function(NanoGList,DataOut,GCC=FALSE) { #using multiple cores to deal with .fastq files is not a good idea
-  
+NanoTableG<-function(NanoGList,DataOut,GCC=FALSE) {
 
-  Label<-NanoGList[[3]]    
-  #Flowcell_ID_Label<-as.character(NanoGList[[2]][1,1])
-
-  #FlowCellId
-
-  #if (Flowcell_ID_Label == "GA10000") {
-    #Flowcell_ID_Label<-as.character("FC1")
-  #}
-  #if (Flowcell_ID_Label == "GA20000") {
-    #Flowcell_ID_Label<-as.character("FC2")
-  #}
-  #if (Flowcell_ID_Label == "GA30000") {
-    #Flowcell_ID_Label<-as.character("FC3")
-  #}
-  #if (Flowcell_ID_Label == "GA40000") {
-    #Flowcell_ID_Label<-as.character("FC4")
-  #}
-  #else {
-    #Flowcell_ID_Label<-as.character("FC5")
-  #}
-
-
-  Directory<-file.path(DataOut,Label)
+  Directory<-file.path(DataOut)
   dir.create(Directory,showWarnings=FALSE, recursive=TRUE)
 
   TableInDirectory<-list.files(Directory,pattern="metadata.txt")
@@ -55,17 +30,17 @@ NanoTableG<-function(NanoGList,DataOut,GCC=FALSE) { #using multiple cores to dea
   
   }
 
-  Read_Id<-as.character(NanoGList[[2]][,1])
-  Channel<-as.numeric(NanoGList[[2]][,2])
-  Mux<-NanoGList[[2]][,3]
-  Length<-as.numeric(NanoGList[[2]][,5])
-  Qscore<-as.numeric(NanoGList[[2]][,6])
-  Relative_Time<-as.numeric(NanoGList[[2]][,4])
+  Read_Id<-as.character(NanoGList$summary[,1])
+  Channel<-as.numeric(NanoGList$summary[,2])
+  Mux<-NanoGList$summary[,3]
+  Length<-as.numeric(NanoGList$summary[,5])
+  Qscore<-as.numeric(NanoGList$summary[,6])
+  Relative_Time<-as.numeric(NanoGList$summary[,4])
 
   if (GCC == TRUE) {
       
     library(ShortRead)
-    #library(seqinr)
+
     message("Calculating GC content...") ## very hard to speed up Fastq parsing in R ... :( 
     # 1 hour for 550 fastq file, 8000 sequences each. Definitely slow.
     
@@ -78,7 +53,7 @@ NanoTableG<-function(NanoGList,DataOut,GCC=FALSE) { #using multiple cores to dea
     }    
     
     Gc_Con<-function(Element) {
-      fqFile<-FastqFile(Element) ## deal with possible error. Not possible to remove single ill-formatted .fastq as far as I know.
+      fqFile<-FastqFile(Element)
       Fastq <- tryCatch({
         readFastq(fqFile)},
         error = function(cond) {
@@ -88,7 +63,7 @@ NanoTableG<-function(NanoGList,DataOut,GCC=FALSE) { #using multiple cores to dea
           return(NULL)}
       )
       if (is.null(Fastq)) {
-        warning("Ill-formatted .fastq file: ", Element, " .Skipped")
+        warning("Ill-formatted FASTQ : ", Element, " .Skipped")
       }
       else {
         CharRead<-as.character(sread(Fastq))
@@ -103,7 +78,7 @@ NanoTableG<-function(NanoGList,DataOut,GCC=FALSE) { #using multiple cores to dea
     GCL<-length(GC_Content)
     NT<-nrow(NanoGList[[2]])
     
-    if (GCL != NT) { ##lack of some fastq sequences . Get GC content from what we have in the future. Do not sample what we have
+    if (GCL != NT) { ##lack of some FASTQ . Get GC content from what we have.
       LackOfReads<-NT-GCL
       GC_To_Add<-rep(NA, LackOfReads)
       GC_Content<-c(GC_Content,GC_To_Add)
