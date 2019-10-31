@@ -4,7 +4,7 @@
 
 #' @title NanoPrepareG
 #' @description Organize MinION/GridION sequencing summary and FASTQ
-#' @param DataSummary Path to sequencing summary 
+#' @param DataSummary Path to sequencing summary
 #' @param DataFastq Path to passed FASTQ
 #' @details FASTQ are found recursively
 #' @return Object of class list
@@ -19,20 +19,20 @@
 NanoPrepareG<-function(DataSummary,DataFastq) {
 
   List<-list()
-    
+
   FastqFiles<-list.files(DataFastq,pattern=".fastq",full.names=TRUE, recursive=TRUE)
   message('Passed FASTQ: ', length(FastqFiles))
-    
+
 
   Read_Table_Summary<-function(File) {
 
-    Table<-read.table(File,header=FALSE,sep="\t",skip=1)
-    RealativeTimeToAdd<-(as.numeric(Table[,11])+as.numeric(Table[,13]))
-    Read_Id<-as.character(Table[,3])
-    Channel<-as.numeric(Table[,5])
-    Mux<-as.numeric(Table[,6])    
-    Length<-as.numeric(Table[,14])
-    Qscore<-as.numeric(Table[,15])
+    Table<-read.table(File,header=TRUE,sep="\t")
+    RealativeTimeToAdd<-(as.numeric(Table$template_start)+as.numeric(Table$template_duration))
+    Read_Id<-as.character(Table$read_id)
+    Channel<-as.numeric(Table$channel)
+    Mux<-as.numeric(Table$mux)
+    Length<-as.numeric(Table$sequence_length_template)
+    Qscore<-as.numeric(Table$mean_qscore_template)
     Table<-cbind(Read_Id,Channel,Mux,RealativeTimeToAdd,Length,Qscore)
     return(Table)
   }
@@ -42,13 +42,14 @@ NanoPrepareG<-function(DataSummary,DataFastq) {
   SummaryTable<-Read_Table_Summary(DataSummary)
 
   colnames(SummaryTable)<-c("Read Id","Channel Number","Mux Number","Relative Time","Length of Read","Quality")
-  
+
   List[['fastq']] <-FastqFiles
   List[['summary']]<-SummaryTable
 
   message("Done")
 
   return(List)
-  
+
 }
+
 
