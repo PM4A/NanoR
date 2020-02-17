@@ -1,5 +1,7 @@
 # NanoR
 
+![GitHub language count](https://img.shields.io/github/languages/count/davidebolo1993/NanoR)
+
 ![alt text](NanoR.png)
 
 ## NanoR: R package to analyze/visualize and compare ONT data
